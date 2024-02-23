@@ -1,9 +1,5 @@
-FROM python:alpine
+FROM quay.io/jupyterhub/k8s-hub:3.2.1
 
-RUN apk add gcc
 RUN pip install --upgrade pip
-RUN pip install kubernetes
-RUN MULTIDICT_NO_EXTENSIONS=1 pip install kopf
-ADD ./service.py /src/service.py
-
-CMD kopf run /src/service.py -A --standalone
+RUN pip install kubespawner-keycloak==0.1.2
+COPY ./jupyterhub_config.d/jupyterhub_custom_config.py /usr/local/etc/jupyterhub/jupyterhub_config.d/jupyterhub_config_custom.py
