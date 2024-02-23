@@ -48,7 +48,9 @@ def userdata_hook(spawner, auth_state):
 
 def get_workspaces(spawner: KubeSpawner):
     base_url = z2jh.get_config("hub.config.GenericOAuthenticator.keycloak_api_base_url")
-    keycloak = KubespawnerKeycloak(spawner = spawner, base_url = base_url, access_token = spawner.access_token, environments_config = z2jh.get_config("custom.environments"))
+    client_id = z2jh.get_config("hub.config.GenericOAuthenticator.client_id")
+    client_secret = z2jh.get_config("hub.config.GenericOAuthenticator.client_secret")
+    keycloak = KubespawnerKeycloak(spawner = spawner, base_url = base_url, client_id = client_id, client_secret= client_secret , environments_config = z2jh.get_config("custom.environments"))
     return keycloak.get_permitted_workspaces()
 
 config.load_incluster_config()
