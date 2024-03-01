@@ -5,3 +5,5 @@ RUN pip install kubespawner-keycloak==0.1.4
 RUN pip install lscsde-workspace-mgmt==0.1.0
 
 COPY ./jupyterhub_config.d/jupyterhub_custom_config.py /usr/local/etc/jupyterhub/jupyterhub_config.d/jupyterhub_config_custom.py
+
+ENV WORKSPACE_MANAGER=keycloak
