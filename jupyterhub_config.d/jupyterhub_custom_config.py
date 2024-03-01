@@ -19,10 +19,6 @@ class WorkspaceManager:
         self.keycloak_client_id = z2jh.get_config("hub.config.GenericOAuthenticator.client_id")
         self.keycloak_client_secret = z2jh.get_config("hub.config.GenericOAuthenticator.client_secret")
         self.keycloak_environments = z2jh.get_config("custom.environments")
-        self.lscsde_workspace_manager : AnalyticsWorkspaceManager = None
-        match self.name:
-            case "lscsde":
-                self.lscsde_workspace_manager = AnalyticsWorkspaceManager(api_client = api_client)
 
     # Effective Feature Flag based on environmental variable, defaults to keycloak if not present
     async def get_workspaces(self, spawner : KubeSpawner):
@@ -34,7 +30,8 @@ class WorkspaceManager:
     
     async def get_workspaces_lscsde(self, spawner: KubeSpawner):
         username : str = spawner.user.name
-        return await self.lscsde_workspace_manager.get_permitted_workspaces(self.namespace, username)
+        mgr = AnalyticsWorkspaceManager(api_client = api_client, log = spawner.log)
+        return await mgr.get_permitted_workspaces(self.namespace, username)
     
     def get_workspaces_keycloak(self, spawner: KubeSpawner):
         keycloak = KubespawnerKeycloak(
@@ -57,6 +54,7 @@ class WorkspaceManager:
     async def modify_pod_hook_lscsde(self, spawner: KubeSpawner, pod: V1Pod):
         # Add additional storage from keycloak configuration based on workspace label on pod
         # This ensures that the correct storage is mounted into the correct workspace
+        mgr = AnalyticsWorkspaceManager(api_client = api_client, log = spawner.log)
         
         try:
             metadata: V1ObjectMeta = pod.metadata
@@ -73,13 +71,14 @@ class WorkspaceManager:
                 pod.spec.volumes = []
                 pod.spec.containers[0].volume_mounts = []
 
-                await self.lscsde_workspace_manager.mount_workspace(
+                await mgr.mount_workspace(
                     pod = pod, 
                     storage_class_name = "jupyter-storage",
                     mount_prefix = "/home/jovyan",
                     storage_prefix = "jupyter-"
                     )
-            await self.lscsde_workspace_manager.pvc_client.mount(
+                
+            await mgr.pvc_client.mount(
                 pod = pod,
                 storage_name = "shared",
                 namespace = self.namespace,
