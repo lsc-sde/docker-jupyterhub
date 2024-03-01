@@ -22,15 +22,25 @@ class WorkspaceManager:
 
     # Effective Feature Flag based on environmental variable, defaults to keycloak if not present
     async def get_workspaces(self, spawner : KubeSpawner):
+        spawner.log.info(f"Getting workspaces using manager: {self.name}")
+        workspaces = []
         match self.name:
             case "keycloak":
-                self.get_workspaces_keycloak(spawner)
+                workspaces = self.get_workspaces_keycloak(spawner)
             case "lscsde":
-                await self.get_workspaces_lscsde(spawner)         
-    
+                workspaces = await self.get_workspaces_lscsde(spawner)  
+            case _:
+                spawner.log.error(f"{self.name} is not implemented")
+        
+        if len(workspaces) == 0:
+            raise Exception(f"Could not find any permitted workspaces for user")
+        
+        return workspaces
+
     async def get_workspaces_lscsde(self, spawner: KubeSpawner):
         username : str = spawner.user.name
         mgr = AnalyticsWorkspaceManager(api_client = api_client, log = spawner.log)
+        spawner.log.info(f"Getting permitted workspaces for {username} from {self.namespace} namespace")
         return await mgr.get_permitted_workspaces(self.namespace, username)
     
     def get_workspaces_keycloak(self, spawner: KubeSpawner):
@@ -45,12 +55,20 @@ class WorkspaceManager:
         return keycloak.get_permitted_workspaces()
 
     async def modify_pod_hook(self, spawner: KubeSpawner, pod : V1Pod):
+        metadata : V1ObjectMeta = pod.metadata
+        spawner.log.info(f"Modifying Pod {metadata.name} on {metadata.namespace} using manager: {self.name}")
+        if not metadata.namespace:
+            spawner.log.info(f"Setting Pod namespace to {self.namespace} on {metadata.name}")
+            metadata.namespace = self.namespace
+            
         match self.name:
             case "keycloak":
-                await self.modify_pod_hook_keycloak(spawner)
+                return await self.modify_pod_hook_keycloak(spawner, pod)
             case "lscsde":
-                await self.modify_pod_hook_lscsde(spawner) 
-
+                return await self.modify_pod_hook_lscsde(spawner, pod) 
+            case _:
+                raise(Exception(f"{self.name} is not implemented"))   
+             
     async def modify_pod_hook_lscsde(self, spawner: KubeSpawner, pod: V1Pod):
         # Add additional storage from keycloak configuration based on workspace label on pod
         # This ensures that the correct storage is mounted into the correct workspace
@@ -73,19 +91,21 @@ class WorkspaceManager:
 
                 await mgr.mount_workspace(
                     pod = pod, 
-                    storage_class_name = "jupyter-storage",
+                    storage_class_name = "jupyter-default",
                     mount_prefix = "/home/jovyan",
                     storage_prefix = "jupyter-"
                     )
                 
             await mgr.pvc_client.mount(
                 pod = pod,
-                storage_name = "shared",
+                storage_name = "jupyter-shared",
                 namespace = self.namespace,
-                storage_class_name = "jupyter-storage",
+                storage_class_name = "jupyter-default",
                 mount_path = "/home/jovyan/shared",
                 read_only = True
             )
+
+            spawner.log.info(f"Pod Definition {pod}")
 
         except Exception as e:
             spawner.log.error(f"Error mounting storage! Error msg {str(e)}")
@@ -128,11 +148,12 @@ load_incluster_config()
 api_client = ApiClient() 
 workspace_manager = WorkspaceManager(api_client = api_client)
 c.KubeSpawner.start_timeout = 900
-c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
-c.GenericOAuthenticator.enable_auth_state = True
 os.environ['JUPYTERHUB_CRYPT_KEY'] = token_hex(32)
 
-c.Spawner.auth_state_hook = userdata_hook
+if workspace_manager.name == "keycloak":
+    c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
+    c.Spawner.auth_state_hook = userdata_hook
+
 c.KubeSpawner.modify_pod_hook = workspace_manager.modify_pod_hook
 c.KubeSpawner.profile_list = workspace_manager.get_workspaces
 c.KubeSpawner.profile_form_template = """
