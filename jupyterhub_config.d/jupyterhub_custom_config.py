@@ -1,69 +1,141 @@
 from secrets import token_hex
 
 from kubespawner_keycloak import KubespawnerKeycloak, VolumeManager
-from kubernetes_asyncio import client, config
-from kubernetes_asyncio.client import V1Pod, V1ObjectMeta
+from kubernetes_asyncio.client import V1Pod, V1ObjectMeta, ApiClient
+from kubernetes_asyncio.config import load_incluster_config
 from kubespawner.utils import get_k8s_model
 from kubespawner import KubeSpawner
+from lscsde_workspace_mgmt import AnalyticsWorkspaceManager
+from lscsde_workspace_mgmt.managers import PersistentVolumeClaimClient
 import os
 import z2jh
 
-async def modify_pod_hook(spawner: KubeSpawner, pod: V1Pod):
-    # Add additional storage based on workspace label on pod
-    # This ensures that the correct storage is mounted into the correct workspace
+class WorkspaceManager:
+    def __init__(self, api_client : ApiClient):
+        self.name : str = os.environ.get("WORKSPACE_MANAGER", "keycloak").casefold()
+        self.namespace = os.environ.get("POD_NAMESPACE", "default")
+        self.keycloak_base_url = z2jh.get_config("hub.config.GenericOAuthenticator.keycloak_api_base_url")
+        self.keycloak_token_url = z2jh.get_config("hub.config.GenericOAuthenticator.keycloak_token_url")
+        self.keycloak_client_id = z2jh.get_config("hub.config.GenericOAuthenticator.client_id")
+        self.keycloak_client_secret = z2jh.get_config("hub.config.GenericOAuthenticator.client_secret")
+        self.keycloak_environments = z2jh.get_config("custom.environments")
+        self.lscsde_workspace_manager : AnalyticsWorkspaceManager = None
+        match self.name:
+            case "lscsde":
+                self.lscsde_workspace_manager = AnalyticsWorkspaceManager(api_client = api_client)
+
+    # Effective Feature Flag based on environmental variable, defaults to keycloak if not present
+    async def get_workspaces(self, spawner : KubeSpawner):
+        match self.name:
+            case "keycloak":
+                self.get_workspaces_keycloak(spawner)
+            case "lscsde":
+                await self.get_workspaces_lscsde(spawner)         
     
-    try:
-        metadata: V1ObjectMeta = pod.metadata
-        spawner.log.info(f"Attempting to mount storage for pod {metadata.name} on {metadata.namespace}")
-
-        namespace = os.environ.get("POD_NAMESPACE", "default")
-        workspace = metadata.labels.get("workspace", "")
-        volume_manager : VolumeManager = VolumeManager(spawner, k8s_api)
-
-        if workspace:
-            # Remove other user storage if workspace has dedicated storage specified
-            # This prevents user from moving data between workspaces using their personal
-            # storage that appears in all workpaces.
-            # Unless the user is an admin user, in which case leave their storage in place
-
-            admin_users = z2jh.get_config(
-                "hub.config.AzureAdOAuthenticator.admin_users", []
+    async def get_workspaces_lscsde(self, spawner: KubeSpawner):
+        username : str = spawner.user.name
+        return await self.lscsde_workspace_manager.get_permitted_workspaces(self.namespace, username)
+    
+    def get_workspaces_keycloak(self, spawner: KubeSpawner):
+        keycloak = KubespawnerKeycloak(
+            spawner = spawner, 
+            base_url = self.keycloak_base_url, 
+            token_url = self.keycloak_token_url, 
+            client_id = self.keycloak_client_id, 
+            client_secret= self.keycloak_client_secret , 
+            environments_config = self.keycloak_environments
             )
+        return keycloak.get_permitted_workspaces()
 
-            if spawner.user.name not in admin_users:
+    async def modify_pod_hook(self, spawner: KubeSpawner, pod : V1Pod):
+        match self.name:
+            case "keycloak":
+                await self.modify_pod_hook_keycloak(spawner)
+            case "lscsde":
+                await self.modify_pod_hook_lscsde(spawner) 
+
+    async def modify_pod_hook_lscsde(self, spawner: KubeSpawner, pod: V1Pod):
+        # Add additional storage from keycloak configuration based on workspace label on pod
+        # This ensures that the correct storage is mounted into the correct workspace
+        
+        try:
+            metadata: V1ObjectMeta = pod.metadata
+            spawner.log.info(f"Attempting to mount storage for pod {metadata.name} on {metadata.namespace}")
+                        
+            workspace = metadata.labels.get("workspace", "")
+            
+            if workspace:
+                # Remove other user storage if workspace has dedicated storage specified
+                # This prevents user from moving data between workspaces using their personal
+                # storage that appears in all workpaces.
+                # Unless the user is an admin user, in which case leave their storage in place
+
                 pod.spec.volumes = []
                 pod.spec.containers[0].volume_mounts = []
 
-            await volume_manager.mount_volume(pod, workspace, namespace)        
-        await volume_manager.mount_volume(pod, "shared", namespace, read_only=True)
+                await self.lscsde_workspace_manager.mount_workspace(
+                    pod = pod, 
+                    storage_class_name = "jupyter-storage",
+                    mount_prefix = "/home/jovyan",
+                    storage_prefix = "jupyter-"
+                    )
+            await self.lscsde_workspace_manager.pvc_client.mount(
+                pod = pod,
+                storage_name = "shared",
+                namespace = self.namespace,
+                storage_class_name = "jupyter-storage",
+                mount_path = "/home/jovyan/shared",
+                read_only = True
+            )
 
-    except Exception as e:
-        spawner.log.error(f"Error mounting storage! Error msg {str(e)}")
+        except Exception as e:
+            spawner.log.error(f"Error mounting storage! Error msg {str(e)}")
 
-    return pod
+        return pod     
+
+    async def modify_pod_hook_keycloak(self, spawner: KubeSpawner, pod: V1Pod):
+        # Add additional storage from keycloak configuration based on workspace label on pod
+        # This ensures that the correct storage is mounted into the correct workspace
+        
+        try:
+            metadata: V1ObjectMeta = pod.metadata
+            spawner.log.info(f"Attempting to mount storage for pod {metadata.name} on {metadata.namespace}")
+
+            workspace = metadata.labels.get("workspace", "")
+            volume_manager = VolumeManager(spawner, api_client)
+
+            if workspace:
+                # Remove other user storage if workspace has dedicated storage specified
+                # This prevents user from moving data between workspaces using their personal
+                # storage that appears in all workpaces.
+                # Unless the user is an admin user, in which case leave their storage in place
+
+                pod.spec.volumes = []
+                pod.spec.containers[0].volume_mounts = []
+
+                await volume_manager.mount_volume(pod, workspace, self.namespace)        
+            await volume_manager.mount_volume(pod, "shared", self.namespace, read_only=True)
+
+        except Exception as e:
+            spawner.log.error(f"Error mounting storage! Error msg {str(e)}")
+
+        return pod
 
 def userdata_hook(spawner, auth_state):
     spawner.oauth_user = auth_state["oauth_user"]
     spawner.access_token = auth_state["access_token"]
 
-def get_workspaces(spawner: KubeSpawner):
-    base_url = z2jh.get_config("hub.config.GenericOAuthenticator.keycloak_api_base_url")
-    token_url = z2jh.get_config("hub.config.GenericOAuthenticator.keycloak_token_url")
-    client_id = z2jh.get_config("hub.config.GenericOAuthenticator.client_id")
-    client_secret = z2jh.get_config("hub.config.GenericOAuthenticator.client_secret")
-    keycloak = KubespawnerKeycloak(spawner = spawner, base_url = base_url, token_url=token_url, client_id = client_id, client_secret= client_secret , environments_config = z2jh.get_config("custom.environments"))
-    return keycloak.get_permitted_workspaces()
-
-config.load_incluster_config()
-k8s_api = client.ApiClient() 
+load_incluster_config()
+api_client = ApiClient() 
+workspace_manager = WorkspaceManager(api_client = api_client)
 c.KubeSpawner.start_timeout = 900
 c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
 c.GenericOAuthenticator.enable_auth_state = True
 os.environ['JUPYTERHUB_CRYPT_KEY'] = token_hex(32)
 
 c.Spawner.auth_state_hook = userdata_hook
-c.KubeSpawner.modify_pod_hook = modify_pod_hook
-c.KubeSpawner.profile_list = get_workspaces
+c.KubeSpawner.modify_pod_hook = workspace_manager.modify_pod_hook
+c.KubeSpawner.profile_list = workspace_manager.get_workspaces
 c.KubeSpawner.profile_form_template = """
         <style>
         /* The profile description should not be bold, even though it is inside the <label> tag */
