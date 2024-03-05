@@ -20,6 +20,25 @@ class WorkspaceManager:
         self.keycloak_client_secret = z2jh.get_config("hub.config.GenericOAuthenticator.client_secret")
         self.keycloak_environments = z2jh.get_config("custom.environments")
 
+    
+    async def auth_state_hook(self, spawner : KubeSpawner, auth_state):
+        spawner.log.info(f"Getting Auth State using manager: {self.name}")
+        match workspace_manager.name:
+            case "keycloak":
+                self.keycloak_auth_state_hook(spawner, auth_state)
+
+            case "lscsde":
+                self.lscsde_auth_state_hook(spawner, auth_state)
+            
+    def keycloak_auth_state_hook(self, spawner : KubeSpawner, auth_state):
+        spawner.log.info(f"Processing auth state for keycloak")
+        spawner.oauth_user = auth_state["oauth_user"]
+        spawner.access_token = auth_state["access_token"]
+
+    def lscsde_auth_state_hook(self, spawner : KubeSpawner, auth_state):
+        spawner.log.info(f"Processing auth state for lscsde")
+
+
     # Effective Feature Flag based on environmental variable, defaults to keycloak if not present
     async def get_workspaces(self, spawner : KubeSpawner):
         spawner.log.info(f"Getting workspaces using manager: {self.name}")
@@ -38,6 +57,7 @@ class WorkspaceManager:
         return workspaces
 
     async def get_workspaces_lscsde(self, spawner: KubeSpawner):
+        spawner.log.info(f"Groups = {spawner.user.groups}")
         username : str = spawner.user.name
         mgr = AnalyticsWorkspaceManager(api_client = api_client, log = spawner.log)
         spawner.log.info(f"Getting permitted workspaces for {username} from {self.namespace} namespace")
@@ -140,20 +160,17 @@ class WorkspaceManager:
 
         return pod
 
-def userdata_hook(spawner, auth_state):
-    spawner.oauth_user = auth_state["oauth_user"]
-    spawner.access_token = auth_state["access_token"]
 
 load_incluster_config()
 api_client = ApiClient() 
 workspace_manager = WorkspaceManager(api_client = api_client)
 c.KubeSpawner.start_timeout = 900
-os.environ['JUPYTERHUB_CRYPT_KEY'] = token_hex(32)
+crypt_key = os.environ.get('JUPYTERHUB_CRYPT_KEY') 
+if not crypt_key:
+    crypt_key = token_hex(32)
+    os.environ.setdefault('JUPYTERHUB_CRYPT_KEY', crypt_key)
 
-if workspace_manager.name == "keycloak":
-    c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
-    c.Spawner.auth_state_hook = userdata_hook
-
+c.Spawner.auth_state_hook = workspace_manager.auth_state_hook
 c.KubeSpawner.modify_pod_hook = workspace_manager.modify_pod_hook
 c.KubeSpawner.profile_list = workspace_manager.get_workspaces
 c.KubeSpawner.profile_form_template = """
