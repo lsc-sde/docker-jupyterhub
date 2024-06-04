@@ -194,7 +194,7 @@ c.KubeSpawner.profile_form_template = """
                 {% if profile.kubespawner_override.image %}
                     <br><em>Image: {{ profile.kubespawner_override.image.split('/')[-1] }}</em>
                 {% endif %}
-                <br><em>Your access expires in : {{profile.user_ws_days_left }} days.</em>
+                <br><em>Your access expires in : {{profile.ws_days_left.days }} days.</em>
                 </p>
             </div>
         </label>
