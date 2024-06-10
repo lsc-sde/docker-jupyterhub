@@ -54,6 +54,29 @@ class WorkspaceManager:
         if len(workspaces) == 0:
             raise Exception(f"Could not find any permitted workspaces for user")
         
+        for workspace in workspaces:
+            mem_limit = workspace.get("kubespawner_override", {}).get("mem_limit", spawner.mem_limit)
+            mem_guarantee = workspace.get("kubespawner_override", {}).get("mem_guarantee", spawner.mem_guarantee)
+            cpu_limit = workspace.get("kubespawner_override", {}).get("cpu_limit", spawner.cpu_limit)
+            cpu_guarantee = workspace.get("kubespawner_override", {}).get("cpu_guarantee", spawner.cpu_guarantee)
+
+            if not mem_limit:
+                mem_limit = 2147483648
+
+            if not mem_guarantee:
+                mem_limit = 1073741824
+
+            if not cpu_limit:
+                cpu_limit = 1
+
+            if not cpu_guarantee:
+                cpu_guarantee = 1
+
+            workspace["kubespawner_override"]["mem_limit"] = mem_limit
+            workspace["kubespawner_override"]["mem_guarantee"] = mem_guarantee
+            workspace["kubespawner_override"]["cpu_limit"] = cpu_limit
+            workspace["kubespawner_override"]["cpu_guarantee"] = cpu_guarantee
+
         return workspaces
 
     async def get_workspaces_lscsde(self, spawner: KubeSpawner):
@@ -175,10 +198,33 @@ c.KubeSpawner.modify_pod_hook = workspace_manager.modify_pod_hook
 c.KubeSpawner.profile_list = workspace_manager.get_workspaces
 c.KubeSpawner.profile_form_template = """
         <style>
-        /* The profile description should not be bold, even though it is inside the <label> tag */
-        #kubespawner-profiles-list label p {
+        .workspace {
             font-weight: normal;
         }
+
+        .workspace_name {
+            font-weight: bold;
+        }
+
+        .workspace_header {
+            font-style: italic;  
+            font-weight: bold;          
+        }
+
+        .workspace_subheader {
+            font-style: italic;  
+        }
+
+        .workspace_details {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .workspace_resources {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
         </style>
         <div class='form-group' id='kubespawner-profiles-list'>
         {% for profile in profile_list %}
@@ -186,16 +232,97 @@ c.KubeSpawner.profile_form_template = """
             <div class='col-md-1'>
                 <input type='radio' name='profile' id='profile-item-{{ profile.slug }}' value='{{ profile.slug }}' {% if profile.default %}checked{% endif %} />
             </div>
-            <div class='col-md-11'>
-                <strong>{{ profile.display_name }}</strong>
-                {% if profile.description %}
-                    <p>{{ profile.description }}
-                {% endif %}
-                {% if profile.kubespawner_override.image %}
-                    <br><em>Image: {{ profile.kubespawner_override.image.split('/')[-1] }}</em>
-                {% endif %}
-                <br><em>Your access expires in : {{profile.ws_days_left.days }} days.</em>
-                </p>
+            <div class='col-md-11 workspace'>
+                <div>
+                    <div class='row'>
+                        <div class='col-md-11'>
+                            <div class='workspace_name'>{{ profile.display_name }}</div>
+                            {% if profile.description %}
+                                <div class='workspace_description'>{{ profile.description }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class='row workspace_details'>
+                        <div class='col-md-6'>
+                            {% if profile.kubespawner_override.image %}
+                                <div class='workspace_header'>
+                                    Image:
+                                </div>
+                                <div class='workspace_image'>
+                                    {{ profile.kubespawner_override.image.split('/')[-1] }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='workspace_header'>
+                                Access expires in:
+                            </div>
+                            <div class='workspace_expiry'>
+                                {{profile.ws_days_left.days }} days.
+                            </div>
+                        </div>
+                    </div>
+                    <div class='row workspace_resources'>
+                        <div class='col-md-6'>
+                            <div class='workspace_header'>
+                                Memory:
+                            </div>
+                            <div class='col-md-6'>
+                                <div class='workspace_subheader'>
+                                    Guaranteed:
+                                </div>
+                                <div> 
+                                    {% if profile.kubespawner_override %}
+                                        {% if profile.kubespawner_override.mem_guarantee %}
+                                            {{profile.kubespawner_override.mem_guarantee / 1024 / 1024 / 1024 }}Gi
+                                        {% endif %}
+                                    {% endif %} &nbsp;
+                                </div>
+                            </div>
+                            <div class='col-md-6'>
+                                <div class='workspace_subheader'>
+                                    Limit:
+                                </div>
+                                <div> 
+                                    {% if profile.kubespawner_override %}
+                                        {% if profile.kubespawner_override.mem_limit %}
+                                            {{profile.kubespawner_override.mem_limit / 1024 / 1024 / 1024}}Gi
+                                        {% endif %}
+                                    {% endif %} &nbsp;
+                                </div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='workspace_header'>
+                                CPU:
+                            </div>
+                            <div class='col-md-6'>
+                                <div class='workspace_subheader'>
+                                    Guaranteed:
+                                </div>
+                                <div> 
+                                    {% if profile.kubespawner_override %}
+                                        {% if profile.kubespawner_override.cpu_guarantee %}
+                                            {{profile.kubespawner_override.cpu_guarantee}}
+                                        {% endif %}
+                                    {% endif %} &nbsp;
+                                </div>
+                            </div>
+                            <div class='col-md-6'>
+                                <div class='workspace_subheader'>
+                                    Limit:
+                                </div>
+                                <div> 
+                                    {% if profile.kubespawner_override %}
+                                        {% if profile.kubespawner_override.cpu_limit %}
+                                            {{profile.kubespawner_override.cpu_limit}}
+                                        {% endif %}
+                                    {% endif %} &nbsp;
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </label>
         {% endfor %}
