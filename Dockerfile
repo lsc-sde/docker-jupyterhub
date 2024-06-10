@@ -8,4 +8,4 @@ COPY ./jupyterhub_config.d/jupyterhub_custom_config.py /usr/local/etc/jupyterhub
 COPY ./custom_templates/page.html /usr/local/etc/jupyterhub/custom_templates/page.html
 COPY ./custom_templates/spawn.html /usr/local/etc/jupyterhub/custom_templates/spawn.html
 
-ENV WORKSPACE_MANAGER=keycloak
+ENV WORKSPACE_MANAGER=lscsde
