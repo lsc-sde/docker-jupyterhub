@@ -9,6 +9,8 @@ from lscsde_workspace_mgmt import AnalyticsWorkspaceManager
 from lscsde_workspace_mgmt.managers import PersistentVolumeClaimClient
 import os
 import z2jh
+from kubernetes.utils import quantity 
+
 
 class WorkspaceManager:
     def __init__(self, api_client : ApiClient):
@@ -82,8 +84,8 @@ class WorkspaceManager:
             workspace["kubespawner_override"]["cpu_limit"] = cpu_limit
             workspace["kubespawner_override"]["cpu_guarantee"] = cpu_guarantee
 
-            workspace["kubespawner_override"]["mem_guarantee_friendly"] = mem_guarantee / 1024 / 1024 / 1024
-            workspace["kubespawner_override"]["mem_limit_friendly"] = mem_limit  / 1024 / 1024 / 1024
+            workspace["kubespawner_override"]["mem_guarantee_friendly"] = float(quantity.parse_quantity(mem_guarantee)) / 1024.0 / 1024.0 / 1024.0
+            workspace["kubespawner_override"]["mem_limit_friendly"] = float(quantity.parse_quantity(mem_limit)) / 1024.0 / 1024.0 / 1024.0
 
         return workspaces
 
