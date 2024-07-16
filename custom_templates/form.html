@@ -75,7 +75,7 @@
                         <div> 
                             {% if profile.kubespawner_override %}
                                 {% if profile.kubespawner_override.mem_guarantee %}
-                                    {{profile.kubespawner_override.mem_guarantee / 1024 / 1024 / 1024 }}Gi
+                                    {{profile.kubespawner_override.mem_guarantee_friendly}}Gi
                                 {% endif %}
                             {% endif %} &nbsp;
                         </div>
@@ -87,7 +87,7 @@
                         <div> 
                             {% if profile.kubespawner_override %}
                                 {% if profile.kubespawner_override.mem_limit %}
-                                    {{profile.kubespawner_override.mem_limit / 1024 / 1024 / 1024}}Gi
+                                    {{profile.kubespawner_override.mem_limit_friendly}}Gi
                                 {% endif %}
                             {% endif %} &nbsp;
                         </div>

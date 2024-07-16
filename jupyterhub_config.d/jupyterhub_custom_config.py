@@ -81,7 +81,9 @@ class WorkspaceManager:
             workspace["kubespawner_override"]["mem_guarantee"] = mem_guarantee
             workspace["kubespawner_override"]["cpu_limit"] = cpu_limit
             workspace["kubespawner_override"]["cpu_guarantee"] = cpu_guarantee
-            
+
+            workspace["kubespawner_override"]["mem_guarantee_friendly"] = mem_guarantee / 1024 / 1024 / 1024
+            workspace["kubespawner_override"]["mem_limit_friendly"] = mem_limit  / 1024 / 1024 / 1024
 
         return workspaces
 
