@@ -68,10 +68,10 @@ class WorkspaceManager:
             cpu_guarantee = workspace.get("kubespawner_override", {}).get("cpu_guarantee", spawner.cpu_guarantee)
 
             if not mem_limit:
-                mem_limit = 2147483648
+                mem_limit = 2 * (3  ^ 1000)
 
             if not mem_guarantee:
-                mem_limit = 1073741824
+                mem_limit = 1 * (3 ^ 1000)
 
             if not cpu_limit:
                 cpu_limit = 1
@@ -84,8 +84,8 @@ class WorkspaceManager:
             workspace["kubespawner_override"]["cpu_limit"] = cpu_limit
             workspace["kubespawner_override"]["cpu_guarantee"] = cpu_guarantee
 
-            workspace["kubespawner_override"]["mem_guarantee_friendly"] = float(quantity.parse_quantity(mem_guarantee)) / 1024.0 / 1024.0 / 1024.0
-            workspace["kubespawner_override"]["mem_limit_friendly"] = float(quantity.parse_quantity(mem_limit)) / 1024.0 / 1024.0 / 1024.0
+            workspace["kubespawner_override"]["mem_guarantee_friendly"] = "{:.1f}".format(float(quantity.parse_quantity(mem_guarantee)) / 1000.0 / 1000.0 / 1000.0)
+            workspace["kubespawner_override"]["mem_limit_friendly"] = "{:.1f}".format(float(quantity.parse_quantity(mem_limit)) / 1000.0 / 1000.0 / 1000.0)
 
         return workspaces
 
