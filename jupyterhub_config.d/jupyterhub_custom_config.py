@@ -49,18 +49,19 @@ class WorkspaceManager:
             case "keycloak":
                 workspaces = self.get_workspaces_keycloak(spawner)
             case "lscsde":
-                workspaces = await self.get_workspaces_lscsde(spawner)  
+                workspaces = await self.get_workspaces_lscsde(spawner)
             case _:
                 spawner.log.error(f"{self.name} is not implemented")
         
         if len(workspaces) == 0:
             raise Exception(f"Could not find any permitted workspaces for user")
-        
+
+
+
         for workspace in workspaces:
             workspace_name = workspace.get("display_name", "")
-            username : str = spawner.user.name
 
-            spawner.log.info(f"Found workspace {workspace_name} for user {username}")
+            spawner.log.info(f"Found workspace {workspace_name} for user {spawner.user.name}")
             
             mem_limit = workspace.get("kubespawner_override", {}).get("mem_limit", spawner.mem_limit)
             mem_guarantee = workspace.get("kubespawner_override", {}).get("mem_guarantee", spawner.mem_guarantee)
@@ -90,11 +91,13 @@ class WorkspaceManager:
         return workspaces
 
     async def get_workspaces_lscsde(self, spawner: KubeSpawner):
-        spawner.log.info(f"Groups = {spawner.user.groups}")
-        username : str = spawner.user.name
+        spawner.log.info(f"Username = {spawner.user.name}, Groups = {spawner.user.groups}")
+        workspace_name : str = spawner.user.name.split("\\")[0]
+        username : str = spawner.user.name.split("\\")[1]
         mgr = AnalyticsWorkspaceManager(api_client = api_client, log = spawner.log)
         spawner.log.info(f"Getting permitted workspaces for {username} from {self.namespace} namespace")
-        return await mgr.get_permitted_workspaces(self.namespace, username)
+        permitted_workspaces = await mgr.get_permitted_workspaces(self.namespace, username)
+        return [item for item in permitted_workspaces if item.get("slug").casefold() == workspace_name.casefold()]
     
     def get_workspaces_keycloak(self, spawner: KubeSpawner):
         keycloak = KubespawnerKeycloak(
