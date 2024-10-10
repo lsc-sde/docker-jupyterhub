@@ -200,7 +200,7 @@ class WorkspaceManager:
 load_incluster_config()
 api_client = ApiClient() 
 workspace_manager = WorkspaceManager(api_client = api_client)
-c.KubeSpawner.start_timeout = 900
+c.KubeSpawner.start_timeout = os.environ.get('KS_START_TIMEOUT', 900) 
 crypt_key = os.environ.get('JUPYTERHUB_CRYPT_KEY') 
 if not crypt_key:
     crypt_key = token_hex(32)
