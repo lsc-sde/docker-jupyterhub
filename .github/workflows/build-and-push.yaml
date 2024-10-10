@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches:
-    - 'main'
+    - issues/93-launch-failure
 
 jobs:
   buildandpush:
     uses: lsc-sde/lsc-sde/.github/workflows/docker-release.yaml@main
     with:
-      imageName: jupyterhub
+      imageName: jh-93
       directory: docker/jupyterhub
     secrets: inherit
