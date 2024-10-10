@@ -9,6 +9,7 @@ COPY ./jupyterhub_config.d/*.py /usr/local/etc/jupyterhub/jupyterhub_config.d/
 COPY ./custom_templates/page.html /usr/local/etc/jupyterhub/custom_templates/page.html
 COPY ./custom_templates/spawn.html /usr/local/etc/jupyterhub/custom_templates/spawn.html
 COPY ./custom_templates/form.html /usr/local/etc/jupyterhub/custom_templates/form.html
+COPY ./usr/local/lib/python3.11/site-packages/kubespawner/reflector.py /usr/local/lib/python3.11/site-packages/kubespawner/reflector.py
 
 ENV WORKSPACE_MANAGER=lscsde
 ENV DEFAULT_STORAGE_CLASS=jupyter-default
