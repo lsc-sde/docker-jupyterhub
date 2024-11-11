@@ -1,7 +1,7 @@
 ---
 title: Container Image
-ancestor: Jupyter Hub
 parent: Jupyter Hub
+grand_parent: Components
 layout: page
 ---
 
