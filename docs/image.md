@@ -1,7 +1,7 @@
 ---
 title: Jupyter Hub Image
-parent: Dynamic Compute Resource
-grand_parent: Architecture
+parent: Jupyter Hub
+grand_parent: Dynamic Compute Resource
 layout: page
 ---
 
