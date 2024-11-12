@@ -1,7 +1,7 @@
 ---
-title: Container Image
-parent: Jupyter Hub
-grand_parent: Components
+title: Jupyter Hub Image
+parent: Dynamic Compute Resource
+grand_parent: Architecture
 layout: page
 ---
 
