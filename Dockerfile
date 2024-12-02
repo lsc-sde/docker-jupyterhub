@@ -2,7 +2,7 @@ FROM quay.io/jupyterhub/k8s-hub:3.2.1
 
 RUN pip install --upgrade pip
 RUN pip install kubespawner-keycloak==0.1.4
-RUN pip install lscsde-workspace-mgmt==0.1.9
+RUN pip install lscsde-workspace-mgmt==0.1.10
 RUN pip install kubernetes
 
 COPY ./jupyterhub_config.d/*.py /usr/local/etc/jupyterhub/jupyterhub_config.d/
